@@ -1,0 +1,47 @@
+import {
+	image
+	io
+}
+
+const maxX int = 50
+const maxY int = 20
+
+component StripRanger(y int, x stream<int>) (pixels stream<image.Pixel>) {
+	nodes {
+		builder Struct<image.Pixel>,
+		streamBuilder Struct<stream<image.Pixel>>,
+		rgbaBuilder Struct<image.RGBA>
+	}
+	:x.data -> builder:x
+	:y -> builder:y
+	0 -> rgbaBuilder:g
+	255 -> [rgbaBuilder:r, rgbaBuilder:b, rgbaBuilder:a]
+	rgbaBuilder -> builder:color
+	:x.idx -> streamBuilder:idx
+	:x.last -> streamBuilder:last
+	builder -> streamBuilder:data
+	streamBuilder -> :pixels
+}
+
+component StripGenerator(y int) (img image.Image, err error) {
+	nodes { Range, ranger StripRanger, image.New?, Del }
+	0 -> range:from
+	$maxX -> range:to
+	0 -> ranger:y
+	:y -> del
+	range -> ranger:x
+	ranger:pixels -> new
+	new:img -> :img
+}
+
+component Main(start) (stop) {
+	nodes { gen StripGenerator, image.Encode, io.WriteAll, Panic }
+	:start -> [
+		(0 -> gen:y),
+		('mandelbrot.png' -> writeAll:filename)
+	]
+	gen:img -> encode:img
+	encode:data -> writeAll:data
+	[gen:err, encode:err, writeAll:err] -> panic
+	writeAll:sig -> :stop
+}
